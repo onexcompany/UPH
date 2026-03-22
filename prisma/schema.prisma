@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ChargeType {
+  MONTHLY
+  ANNUAL_FEE
+  EXPENSE_SHARE
+}
+
+enum ChargeStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+model Member {
+  id          String    @id @default(cuid())
+  name        String
+  active      Boolean   @default(true)
+  joinedAt    DateTime  @default(now())
+  deactivatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  charges     Charge[]
+  payments    Payment[]
+
+  @@index([active])
+  @@index([name])
+}
+
+model Setting {
+  id                  String   @id @default(cuid())
+  monthlyAmount       Decimal  @db.Decimal(10, 2)
+  annualFeeAmount     Decimal  @db.Decimal(10, 2)
+  defaultYear         Int
+  dueDay              Int      @default(10)
+  currency            String   @default("BRL")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Expense {
+  id            String   @id @default(cuid())
+  description   String
+  amount        Decimal  @db.Decimal(10, 2)
+  expenseDate   DateTime
+  shouldSplit   Boolean  @default(false)
+  splitMemberCount Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  charges       Charge[]
+
+  @@index([expenseDate])
+}
+
+model Charge {
+  id             String       @id @default(cuid())
+  memberId       String
+  expenseId      String?
+  type           ChargeType
+  status         ChargeStatus @default(PENDING)
+  description    String
+  competenceYear Int
+  competenceMonth Int?
+  dueDate        DateTime
+  amount         Decimal      @db.Decimal(10, 2)
+  paidAmount     Decimal      @db.Decimal(10, 2) @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  member         Member       @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  expense        Expense?     @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  allocations    PaymentAllocation[]
+
+  @@index([memberId, dueDate])
+  @@index([status, dueDate])
+  @@index([expenseId])
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  memberId      String
+  amount        Decimal  @db.Decimal(10, 2)
+  unallocatedAmount Decimal @db.Decimal(10, 2) @default(0)
+  paidAt        DateTime
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  member        Member   @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  allocations   PaymentAllocation[]
+
+  @@index([memberId, paidAt])
+}
+
+model PaymentAllocation {
+  id          String   @id @default(cuid())
+  paymentId   String
+  chargeId    String
+  amount      Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  charge      Charge   @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, chargeId])
+  @@index([chargeId])
+}
+
+model Donation {
+  id          String   @id @default(cuid())
+  donorName   String
+  amount      Decimal  @db.Decimal(10, 2)
+  donatedAt   DateTime
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([donatedAt])
+}
